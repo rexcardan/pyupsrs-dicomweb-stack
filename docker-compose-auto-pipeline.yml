@@ -1,0 +1,183 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for Orthanc1
+  postgres1:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: orthanc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orthanc}
+      POSTGRES_DB: orthanc
+    volumes:
+      - postgres1-data:/var/lib/postgresql/data
+    networks:
+      - orthanc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orthanc"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL for Orthanc2
+  postgres2:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: orthanc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orthanc}
+      POSTGRES_DB: orthanc
+    volumes:
+      - postgres2-data:/var/lib/postgresql/data
+    networks:
+      - orthanc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orthanc"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Orthanc1 - Receives DIMSE, auto-forwards to Orthanc2 via DICOMweb
+  orthanc1:
+    image: orthancteam/orthanc:latest
+    container_name: orthanc1
+    depends_on:
+      postgres1:
+        condition: service_healthy
+    ports:
+      - "${DICOM_PORT1:-4242}:4242"    # DIMSE port
+      - "${HTTP_PORT1:-8042}:8042"     # HTTP/DICOMweb port
+    networks:
+      - orthanc-network
+    volumes:
+      - orthanc1-storage:/var/lib/orthanc/db
+      - ./orthanc1-autoforward.lua:/scripts/autoforward.lua:ro
+    environment:
+      ORTHANC__NAME: "Orthanc1"
+      ORTHANC__POSTGRESQL__HOST: postgres1
+      ORTHANC__POSTGRESQL__DATABASE: orthanc
+      ORTHANC__POSTGRESQL__USERNAME: orthanc
+      ORTHANC__POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:-orthanc}
+      ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
+      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
+      ORTHANC__DICOM_AET: "ORTHANC1"
+      ORTHANC__DICOM_CHECK_CALLED_AET: "false"
+      ORTHANC__DICOM_PORT: 4242
+      ORTHANC__DICOM_MODALITIES: |
+        {
+          "ORTHANC2": ["ORTHANC2", "orthanc2", 4242]
+        }
+      ORTHANC__ORTHANC_PEERS: |
+        {
+          "orthanc2": ["http://orthanc2:8042/"]
+        }
+      ORTHANC__DICOM_WEB__ENABLE: "true"
+      ORTHANC__DICOM_WEB__ROOT: "/dicom-web/"
+      ORTHANC__DICOM_WEB__ENABLE_WADO: "true"
+      ORTHANC__DICOM_WEB__WADO_ROOT: "/wado"
+      ORTHANC__DICOM_WEB__QIDO_CASE_SENSITIVE: "false"
+      ORTHANC__DICOM_WEB__STUDIES_METADATA: "Full"
+      ORTHANC__DICOM_WEB__SERIES_METADATA: "Full"
+      ORTHANC__DICOM_WEB__BULK_DATA_URI_SCHEME: "same-as-origin"
+      ORTHANC__DICOM_WEB__PUBLIC_ROOT: "/dicom-web/"
+      ORTHANC__AUTHENTICATION_ENABLED: "false"
+      ORTHANC__REGISTERED_USERS: |
+        {}
+      ORTHANC__SSL_ENABLED: "false"
+      ORTHANC__EXECUTE_LUA_ENABLED: "true"
+      ORTHANC__LUA_SCRIPTS: |
+        ["/scripts/autoforward.lua"]
+      ORTHANC__HTTP_TIMEOUT: 120
+      ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "true"
+      ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "true"
+      ORTHANC__CHECK_REVISIONS: "false"
+      ORTHANC__SYNCHRONOUS_ZMOVE: "true"
+      ORTHANC__SAVE_JOBS: "false"
+      ORTHANC__STABLE_AGE: 3
+    restart: unless-stopped
+
+  # Orthanc2 - Receives via DICOMweb from Orthanc1
+  orthanc2:
+    image: orthancteam/orthanc:latest
+    container_name: orthanc2
+    depends_on:
+      postgres2:
+        condition: service_healthy
+    ports:
+      - "${DICOM_PORT2:-4243}:4242"    # DIMSE port
+      - "${HTTP_PORT2:-8043}:8042"     # HTTP/DICOMweb port
+    networks:
+      - orthanc-network
+    volumes:
+      - orthanc2-storage:/var/lib/orthanc/db
+    environment:
+      ORTHANC__NAME: "Orthanc2"
+      ORTHANC__POSTGRESQL__HOST: postgres2
+      ORTHANC__POSTGRESQL__DATABASE: orthanc
+      ORTHANC__POSTGRESQL__USERNAME: orthanc
+      ORTHANC__POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:-orthanc}
+      ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
+      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
+      ORTHANC__DICOM_AET: "ORTHANC2"
+      ORTHANC__DICOM_CHECK_CALLED_AET: "false"
+      ORTHANC__DICOM_PORT: 4242
+      ORTHANC__DICOM_MODALITIES: |
+        {
+          "ORTHANC1": ["ORTHANC1", "orthanc1", 4242],
+          "PYTHON_SCP": ["PYTHON_SCP", "orthanc2-monitor", 11112]
+        }
+      ORTHANC__ORTHANC_PEERS: |
+        {
+          "orthanc1": ["http://orthanc1:8042/"]
+        }
+      ORTHANC__DICOM_WEB__ENABLE: "true"
+      ORTHANC__DICOM_WEB__ROOT: "/dicom-web/"
+      ORTHANC__DICOM_WEB__ENABLE_WADO: "true"
+      ORTHANC__DICOM_WEB__WADO_ROOT: "/wado"
+      ORTHANC__DICOM_WEB__QIDO_CASE_SENSITIVE: "false"
+      ORTHANC__DICOM_WEB__STUDIES_METADATA: "Full"
+      ORTHANC__DICOM_WEB__SERIES_METADATA: "Full"
+      ORTHANC__DICOM_WEB__BULK_DATA_URI_SCHEME: "same-as-origin"
+      ORTHANC__DICOM_WEB__PUBLIC_ROOT: "/dicom-web/"
+      ORTHANC__AUTHENTICATION_ENABLED: "false"
+      ORTHANC__REGISTERED_USERS: |
+        {}
+      ORTHANC__SSL_ENABLED: "false"
+      ORTHANC__EXECUTE_LUA_ENABLED: "true"
+      ORTHANC__HTTP_TIMEOUT: 120
+      ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "true"
+      ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "true"
+      ORTHANC__CHECK_REVISIONS: "false"
+      ORTHANC__SYNCHRONOUS_ZMOVE: "true"
+      ORTHANC__SAVE_JOBS: "false"
+    restart: unless-stopped
+
+  # Monitor service - watches Orthanc2 and pulls studies to local directory
+  orthanc2-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.dicom-tools
+    container_name: orthanc2-monitor
+    depends_on:
+      - orthanc2
+    networks:
+      - orthanc-network
+    volumes:
+      - ./received_dicom:/dicom/output
+    environment:
+      ORTHANC_HOST: orthanc2
+      ORTHANC_HTTP_PORT: 8042
+      ORTHANC_DICOM_PORT: 4242
+      ORTHANC_AET: ORTHANC2
+      OUTPUT_DIR: /dicom/output
+      POLL_INTERVAL: 5
+    command: python /app/orthanc2_monitor.py
+    restart: unless-stopped
+
+volumes:
+  postgres1-data:
+  postgres2-data:
+  orthanc1-storage:
+  orthanc2-storage:
+
+networks:
+  orthanc-network:
+    driver: bridge

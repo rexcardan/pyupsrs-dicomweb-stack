@@ -1,0 +1,36 @@
+FROM python:3.11-slim
+
+# Install required Python packages
+RUN pip install --no-cache-dir \
+    pydicom \
+    pynetdicom \
+    dicomweb-client \
+    requests
+
+# Create working directory
+WORKDIR /app
+
+# Copy all Python scripts
+COPY dicom_sender.py \
+     dicom_receiver.py \
+     dicomweb_to_dimse.py \
+     dicomweb_forwarder.py \
+     orthanc_to_folder.py \
+     orthanc2_monitor.py \
+     ./
+
+# Make scripts executable
+RUN chmod +x *.py
+
+# Create directories for DICOM files
+RUN mkdir -p /dicom/input /dicom/output /dicom/received
+
+# Default command shows available scripts
+CMD echo "Available DICOM tools:" && \
+    echo "  - python dicom_sender.py <folder> [host] [port] [aet]" && \
+    echo "  - python dicom_receiver.py [port] [aet] [output_dir]" && \
+    echo "  - python dicomweb_to_dimse.py <dicomweb_url> <host> <port> <aet>" && \
+    echo "  - python dicomweb_forwarder.py <source_url> <target_url> [interval]" && \
+    echo "  - python orthanc_to_folder.py [host] [port] [aet] [output_dir]" && \
+    echo "" && \
+    echo "Mount your DICOM files at /dicom/input"

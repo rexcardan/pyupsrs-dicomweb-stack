@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(cp:*)",
+      "Bash(./setup-nginx.sh)",
+      "Bash(dos2unix:*)",
+      "Bash(sed:*)",
+      "Bash(bash:*)",
+      "Bash(docker-compose:*)",
+      "Bash(apt list:*)",
+      "Bash(pip install:*)",
+      "Bash(python3 -m pip install:*)",
+      "Bash(sudo apt-get:*)",
+      "Bash(sudo apt-get install:*)",
+      "Bash(python3:*)",
+      "Bash(source:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker container logs:*)",
+      "Bash(mkdir:*)",
+      "Bash(docker build:*)",
+      "Bash(rm:*)",
+      "Bash(grep:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": []
+  }
+}

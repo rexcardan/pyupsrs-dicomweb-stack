@@ -10,6 +10,7 @@ A non-clinical, research only, all in-one DICOMweb implementation with Orthanc a
 - **Nginx**: High-performance reverse proxy with unified access point
 - **SSL/TLS Support**: Automatic HTTPS configuration with self-signed certificates for development
 - **One-command setup**: Everything is configured automatically
+- **D-DW-D Portal**: Automated DICOM → DICOMweb → DICOM pipeline for seamless protocol bridging
 
 ## Prerequisites
 
@@ -43,6 +44,14 @@ Once setup is complete:
 - **DICOMweb Base URL (HTTPS)**: https://localhost:9443/dicom-web
 - **DIMSE Port**: localhost:4242 (AE Title: ORTHANC)
 - **Orthanc Web UI**: http://localhost:9080/
+
+### D-DW-D Portal (Automated Pipeline)
+
+The D-DW-D Portal provides an automated DICOM workflow that bridges traditional DIMSE with modern DICOMweb:
+
+- **Documentation**: See [D-DW-D-PORTAL.md](D-DW-D-PORTAL.md) for full details
+- **Quick Demo**: See [D-DW-D-PORTAL-DEMO.md](D-DW-D-PORTAL-DEMO.md) for a 5-minute demo
+- **Start Portal**: `docker-compose -f docker-compose-auto-pipeline.yml up -d`
 
 ## API Examples
 
@@ -338,6 +347,14 @@ rm -rf postgres-data orthanc-storage
 - `pyupsrs/Dockerfile.github` - Alternative Dockerfile for GitHub source
 - `pyupsrs/Dockerfile.local` - Alternative Dockerfile for local development
 - `README.md` - This file
+
+### D-DW-D Portal Files
+- `docker-compose-auto-pipeline.yml` - D-DW-D Portal service definitions
+- `orthanc1-autoforward.lua` - Lua script for automatic DICOMweb forwarding
+- `orthanc2_monitor.py` - Python service for automatic DICOM extraction
+- `D-DW-D-PORTAL.md` - Full D-DW-D Portal documentation
+- `D-DW-D-PORTAL-DEMO.md` - Quick demo guide for D-DW-D Portal
+- `Dockerfile.dicom-tools` - Docker image for DICOM utilities
 
 ## License
 

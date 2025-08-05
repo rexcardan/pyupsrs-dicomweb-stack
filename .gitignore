@@ -31,3 +31,4 @@ Thumbs.db
 .qodo/
 venv/
 .venv/
+dicom_env/
