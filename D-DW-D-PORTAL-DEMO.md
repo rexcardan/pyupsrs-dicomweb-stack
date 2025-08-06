@@ -2,6 +2,17 @@
 
 ## 5-Minute Demo Setup
 
+### 0. Reset if Needed (10 seconds)
+If you've run the demo before and want a fresh start:
+```bash
+# Option 1: Use the reset script
+./reset-pipeline.sh
+
+# Option 2: Manual reset with docker-compose
+docker-compose -f docker-compose-auto-pipeline.yml down -v
+rm -rf ./received_dicom/*
+```
+
 ### 1. Start the Portal (30 seconds)
 ```bash
 # Start all services
@@ -23,7 +34,7 @@ docker-compose -f docker-compose-auto-pipeline.yml logs -f orthanc2-monitor
 ### 3. Send Test DICOM Files (30 seconds)
 ```bash
 # In another terminal, send sample DICOM files
-docker run --rm --network pyupsrs-dicomweb-stack_orthanc-network \
+docker run --rm --network pyupsrs-dicomweb-stack-main_orthanc-network \
   -v $(pwd)/sample_dicom:/dicom/input \
   dicom-tools \
   python dicom_sender.py /dicom/input orthanc1 4242 ORTHANC1
@@ -124,7 +135,8 @@ docker-compose -f docker-compose-auto-pipeline.yml up -d
 
 **Nothing showing in monitor?**
 - Check if Orthanc1 received files: http://localhost:8042
-- Verify network: `docker network ls | grep orthanc`
+- Verify network: `docker network ls | grep pyupsrs`
+- The network name should be: `pyupsrs-dicomweb-stack-main_orthanc-network`
 
 **Files not appearing?**
 - Check permissions: `ls -la ./received_dicom/`
@@ -140,7 +152,7 @@ docker-compose -f docker-compose-auto-pipeline.yml up -d
 ```bash
 # Send 100 files in batches
 for i in {1..10}; do
-  docker run --rm --network pyupsrs-dicomweb-stack_orthanc-network \
+  docker run --rm --network pyupsrs-dicomweb-stack-main_orthanc-network \
     -v $(pwd)/sample_dicom:/dicom/input \
     dicom-tools \
     python dicom_sender.py /dicom/input orthanc1 4242 ORTHANC1

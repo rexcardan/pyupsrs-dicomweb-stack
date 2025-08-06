@@ -12,6 +12,7 @@ nginx/ssl/
 
 # Logs
 *.log
+*.dcm
 
 # OS files
 .DS_Store

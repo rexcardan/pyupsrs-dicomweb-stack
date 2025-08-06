@@ -169,6 +169,7 @@ services:
       ORTHANC_AET: ORTHANC2
       OUTPUT_DIR: /dicom/output
       POLL_INTERVAL: 5
+      REPROCESS_DUPLICATES: "true"
     command: python /app/orthanc2_monitor.py
     restart: unless-stopped
 

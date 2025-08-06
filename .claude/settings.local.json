@@ -22,7 +22,9 @@
       "Bash(rm:*)",
       "Bash(grep:*)",
       "Bash(git config:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(docker:*)",
+      "Bash(chmod:*)"
     ],
     "deny": []
   }

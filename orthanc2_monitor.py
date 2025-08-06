@@ -17,7 +17,7 @@ from pynetdicom.sop_class import PatientRootQueryRetrieveInformationModelMove
 class Orthanc2Monitor:
     def __init__(self, orthanc_host='orthanc2', orthanc_http_port=8042, orthanc_dicom_port=4242,
                  orthanc_aet='ORTHANC2', local_aet='PYTHON_SCP', scp_port=11112,
-                 output_dir='/dicom/output', poll_interval=5):
+                 output_dir='/dicom/output', poll_interval=5, reprocess_duplicates=True):
         """
         Initialize the Orthanc2 monitoring service
         
@@ -30,6 +30,7 @@ class Orthanc2Monitor:
             scp_port: Port for the local SCP to listen on
             output_dir: Directory to save received files
             poll_interval: Seconds between checks for new studies
+            reprocess_duplicates: If True, reprocess ALL studies on every check
         """
         self.orthanc_host = orthanc_host
         self.orthanc_http_port = orthanc_http_port
@@ -39,9 +40,10 @@ class Orthanc2Monitor:
         self.scp_port = scp_port
         self.output_dir = output_dir
         self.poll_interval = poll_interval
+        self.reprocess_duplicates = reprocess_duplicates
         self.scp_ae = None
         self.received_instances = 0
-        self.processed_studies = set()
+        self.processed_studies = set()  # Track which studies we've seen this session
         self.state_file = os.path.join(output_dir, '.processed_studies.json')
         
         # Create output directory
@@ -52,7 +54,8 @@ class Orthanc2Monitor:
     
     def load_processed_studies(self):
         """Load the list of previously processed studies"""
-        if os.path.exists(self.state_file):
+        # When reprocess_duplicates is True, we don't load previous state
+        if not self.reprocess_duplicates and os.path.exists(self.state_file):
             try:
                 with open(self.state_file, 'r') as f:
                     self.processed_studies = set(json.load(f))
@@ -63,11 +66,12 @@ class Orthanc2Monitor:
     
     def save_processed_studies(self):
         """Save the list of processed studies"""
-        try:
-            with open(self.state_file, 'w') as f:
-                json.dump(list(self.processed_studies), f)
-        except Exception as e:
-            print(f"Error saving state file: {e}")
+        if not self.reprocess_duplicates:
+            try:
+                with open(self.state_file, 'w') as f:
+                    json.dump(list(self.processed_studies), f)
+            except Exception as e:
+                print(f"Error saving state file: {e}")
     
     def handle_store(self, event):
         """Handle incoming C-STORE requests"""
@@ -173,6 +177,20 @@ class Orthanc2Monitor:
             print("  ✗ Failed to establish association for C-MOVE")
             return False
     
+    def delete_study_from_orthanc(self, study_id):
+        """Delete a study from Orthanc after successful transfer"""
+        try:
+            response = requests.delete(f"http://{self.orthanc_host}:{self.orthanc_http_port}/studies/{study_id}")
+            if response.status_code == 200:
+                print(f"  ✓ Study deleted from Orthanc2")
+                return True
+            else:
+                print(f"  ⚠ Failed to delete study from Orthanc2: {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"  ⚠ Error deleting study: {e}")
+            return False
+    
     def check_for_new_studies(self):
         """Check Orthanc2 for new studies"""
         try:
@@ -182,23 +200,36 @@ class Orthanc2Monitor:
             
             new_studies = []
             for study_id in study_ids:
-                if study_id not in self.processed_studies:
-                    # Get study details
-                    study_details = requests.get(f"http://{self.orthanc_host}:{self.orthanc_http_port}/studies/{study_id}").json()
-                    study_uid = study_details.get('MainDicomTags', {}).get('StudyInstanceUID', '')
-                    
-                    if study_uid:
-                        new_studies.append((study_id, study_uid))
+                # Get study details
+                study_details = requests.get(f"http://{self.orthanc_host}:{self.orthanc_http_port}/studies/{study_id}").json()
+                study_uid = study_details.get('MainDicomTags', {}).get('StudyInstanceUID', '')
+                
+                # Check if we should process this study
+                should_process = False
+                
+                if self.reprocess_duplicates:
+                    # Always process all studies (for continuous pipeline)
+                    should_process = True
+                else:
+                    # Only process if never seen before
+                    if study_id not in self.processed_studies:
+                        should_process = True
+                
+                if should_process and study_uid:
+                    new_studies.append((study_id, study_uid))
             
             if new_studies:
-                print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Found {len(new_studies)} new studies")
+                print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Found {len(new_studies)} studies to process")
                 
                 for study_id, study_uid in new_studies:
                     print(f"\nProcessing study: {study_uid}")
                     
                     # Pull the study via C-MOVE
                     if self.move_study(study_uid):
-                        # Mark as processed
+                        # Delete the study from Orthanc2 after successful transfer
+                        self.delete_study_from_orthanc(study_id)
+                        
+                        # Mark as processed (only matters when reprocess_duplicates is False)
                         self.processed_studies.add(study_id)
                         self.save_processed_studies()
                         
@@ -236,6 +267,7 @@ def main():
     orthanc_aet = os.environ.get('ORTHANC_AET', 'ORTHANC2')
     output_dir = os.environ.get('OUTPUT_DIR', '/dicom/output')
     poll_interval = int(os.environ.get('POLL_INTERVAL', '5'))
+    reprocess_duplicates = os.environ.get('REPROCESS_DUPLICATES', 'true').lower() == 'true'
     
     print("Orthanc2 Monitor Service")
     print("=======================")
@@ -243,6 +275,7 @@ def main():
     print(f"HTTP API: http://{orthanc_host}:{orthanc_http_port}")
     print(f"Output: {os.path.abspath(output_dir)}")
     print(f"Poll interval: {poll_interval}s")
+    print(f"Reprocess duplicates: {reprocess_duplicates}")
     
     monitor = Orthanc2Monitor(
         orthanc_host=orthanc_host,
@@ -250,7 +283,8 @@ def main():
         orthanc_dicom_port=orthanc_dicom_port,
         orthanc_aet=orthanc_aet,
         output_dir=output_dir,
-        poll_interval=poll_interval
+        poll_interval=poll_interval,
+        reprocess_duplicates=reprocess_duplicates
     )
     
     try:
